@@ -1,0 +1,23 @@
+{
+  "name": "tim",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --host",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@tencentcloud/chat-uikit-vue": "3",
+    "nuxt": "^4.4.7"
+  },
+  "devDependencies": {
+    "@unocss/nuxt": "^66.7.0",
+    "@unocss/preset-wind4": "^66.7.0",
+    "sass": "1.77.0",
+    "sass-loader": "10.1.1",
+    "unocss": "^66.7.0"
+  }
+}
