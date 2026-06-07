@@ -3,7 +3,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
   ssr: false,
-  modules: ['@unocss/nuxt'],
+  imports: {
+    dirs: ['stores', 'apis']
+  },
+  modules: ['@unocss/nuxt', '@vant/nuxt', '@pinia/nuxt'],
   vite: {
     server: {
       proxy: {

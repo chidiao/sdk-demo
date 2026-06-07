@@ -4,7 +4,7 @@
     @click="handleClickConv"
   >
     <ConversationHeader
-      v-if="isShowConversationHeader"
+      v-if="false"
       ref="headerRef"
     />
     <ConversationNetwork />

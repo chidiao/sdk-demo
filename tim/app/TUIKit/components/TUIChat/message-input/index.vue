@@ -1,6 +1,7 @@
 <template>
   <div class="message-input-wrapper">
     <div :class="['message-input-container', !isPC && 'message-input-container-h5']">
+      <div class="w-10"></div>
       <MessageInputEditor
         ref="editor"
         :placeholder="props.placeholder"

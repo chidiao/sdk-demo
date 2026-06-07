@@ -21,7 +21,7 @@
         @dialogCloseInH5="dialogCloseInH5"
         @changeToolbarDisplayType="(type) => emits('changeToolbarDisplayType', type)"
       />
-      <ImageUpload
+      <!-- <ImageUpload
         v-if="featureConfig.InputImage"
         imageSourceType="album"
       />
@@ -44,7 +44,7 @@
           :needDialog="false"
           @onIconClick="onExtensionClick(extension)"
         />
-      </template>
+      </template> -->
     </div>
     <div
       v-if="extensionListShowInEnd[0] && isPC"
