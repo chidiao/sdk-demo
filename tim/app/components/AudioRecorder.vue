@@ -1,7 +1,7 @@
 <template>
   <button
     class="record-button"
-    :class="{ 'record-button--active': recording }"
+    :class="{ 'record-button--active': recording, 'record-button--unstyled': unstyled }"
     type="button"
     :disabled="disabled"
     @pointerdown.prevent="handlePressStart"
@@ -10,8 +10,10 @@
     @pointerleave="handlePressLeave"
     @contextmenu.prevent
   >
-    <span class="record-button__icon">{{ recording ? '■' : '●' }}</span>
-    <span>{{ recording ? recordingText : idleText }}</span>
+    <slot :recording="recording" :text="recording ? recordingText : idleText">
+      <span class="record-button__icon">{{ recording ? '■' : '●' }}</span>
+      <span>{{ recording ? recordingText : idleText }}</span>
+    </slot>
   </button>
 </template>
 
@@ -22,12 +24,14 @@ withDefaults(
     recordingText?: string
     recording?: boolean
     disabled?: boolean
+    unstyled?: boolean
   }>(),
   {
     idleText: '按住录音',
     recordingText: '松开结束',
     recording: false,
-    disabled: false
+    disabled: false,
+    unstyled: false
   }
 )
 
@@ -94,5 +98,23 @@ function releasePointer(event: PointerEvent) {
 .record-button--active {
   background: #ee0a24;
   transform: scale(0.98);
+}
+
+.record-button--unstyled {
+  background: transparent;
+  border-radius: 999px;
+  color: inherit;
+  display: block;
+  font-size: inherit;
+  font-weight: inherit;
+  gap: 0;
+  height: 36px;
+  padding: 0;
+  transform: none;
+}
+
+.record-button--unstyled.record-button--active {
+  background: transparent;
+  transform: none;
 }
 </style>

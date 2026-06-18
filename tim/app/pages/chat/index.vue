@@ -16,17 +16,47 @@
     </div>
 
     <div class="input-area">
-      <van-field
-        v-model="inputText"
-        placeholder="输入消息..."
-        :disabled="streaming"
-        @keypress.enter="handleSend"
-        class="input-field"
+      <van-button
+        class="mode-btn"
+        round
+        plain
+        :icon="inputMode === 'text' ? 'volume-o' : 'edit'"
+        :disabled="streaming || isBusy"
+        @click="handleToggleInputMode"
       />
-      <van-button v-if="streaming" type="danger" round @click="handleStop" class="stop-btn"> 终止 </van-button>
-      <van-button v-else type="primary" round :disabled="!inputText.trim()" @click="handleSend" class="send-btn">
-        发送
-      </van-button>
+
+      <template v-if="inputMode === 'text'">
+        <van-field
+          v-model="inputText"
+          placeholder="输入消息..."
+          :disabled="streaming"
+          @keypress.enter="handleSend()"
+          class="input-field"
+        />
+        <van-button v-if="streaming" type="danger" round @click="handleStop" class="stop-btn"> 终止 </van-button>
+        <van-button v-else type="primary" round :disabled="!inputText.trim()" @click="handleSend()" class="send-btn">
+          发送
+        </van-button>
+      </template>
+
+      <AudioRecorder
+        v-else
+        class="voice-record-wrap"
+        idle-text="按住说话"
+        recording-text="松开发送"
+        :recording="isRecording"
+        :disabled="isBusy && !streaming"
+        unstyled
+        @press-start="handleVoicePressStart"
+        @press-end="handleVoicePressEnd"
+        @press-cancel="handleVoicePressCancel"
+      >
+        <template #default="{ recording, text }">
+          <van-button class="voice-record-btn" :type="streaming || recording ? 'danger' : 'primary'" block round>
+            {{ voiceButtonText(recording, text) }}
+          </van-button>
+        </template>
+      </AudioRecorder>
     </div>
   </div>
 </template>
@@ -40,13 +70,27 @@ interface Message {
 
 const router = useRouter()
 const { sendChatStream } = useChatApi()
+const { permissionState, refreshPermission, requestPermission } = useMicrophonePermission()
+const { isRecording, startRecording, stopRecording, cleanup } = usePressRecorder()
+const { isEncoding, encodeToWavFile } = useWavEncoder()
+const { isRecognizing, recognize } = useAsrRecognition()
 const inputText = ref('')
+const inputMode = ref<'text' | 'voice'>('text')
 const streaming = ref(false)
 const messages = ref<Message[]>([])
 const messageListRef = ref<HTMLElement>()
 const errorMsg = ref('')
 
 let abortController: AbortController | null = null
+let streamDisplayTimer: ReturnType<typeof window.setInterval> | null = null
+let pendingStreamText = ''
+
+const isBusy = computed(() => isEncoding.value || isRecognizing.value)
+const voiceBusyText = computed(() => (isEncoding.value ? '正在转换...' : isRecognizing.value ? '正在识别...' : '处理中...'))
+
+onMounted(() => {
+  refreshPermission()
+})
 
 function goBack() {
   router.back()
@@ -60,11 +104,13 @@ function scrollToBottom() {
   })
 }
 
-async function handleSend() {
-  const text = inputText.value.trim()
+async function handleSend(messageText?: string) {
+  const text = (typeof messageText === 'string' ? messageText : inputText.value).trim()
   if (!text || streaming.value) return
 
-  inputText.value = ''
+  if (!messageText) {
+    inputText.value = ''
+  }
   errorMsg.value = ''
 
   messages.value.push({ role: 'user', content: text })
@@ -74,6 +120,7 @@ async function handleSend() {
 
   streaming.value = true
   abortController = new AbortController()
+  pendingStreamText = ''
 
   try {
     const stream = await sendChatStream(text, true, abortController.signal)
@@ -83,6 +130,7 @@ async function handleSend() {
 
     // 通过 reactive 数组访问 assistant 消息，确保响应式更新
     const getAssistantMsg = () => messages.value[messages.value.length - 1] as Message
+    startSmoothStreamDisplay(getAssistantMsg)
 
     while (true) {
       const { done, value } = await reader.read()
@@ -103,9 +151,7 @@ async function handleSend() {
           const parsed = JSON.parse(jsonStr)
           const content = parsed.choices?.[0]?.delta?.content
           if (content) {
-            getAssistantMsg().content += content
-            scrollToBottom()
-            await nextTick()
+            pendingStreamText += content
           }
         } catch {
           // 非 JSON 行，跳过
@@ -114,8 +160,10 @@ async function handleSend() {
     }
 
     reader.releaseLock()
+    await flushSmoothStreamDisplay(getAssistantMsg)
     getAssistantMsg().streaming = false
   } catch (err: any) {
+    stopSmoothStreamDisplay()
     const lastMsg = messages.value[messages.value.length - 1] as Message
     if (err.name === 'AbortError') {
       lastMsg.streaming = false
@@ -128,14 +176,126 @@ async function handleSend() {
       console.error('Chat error:', err)
     }
   } finally {
+    stopSmoothStreamDisplay()
     streaming.value = false
     abortController = null
   }
 }
 
 function handleStop() {
+  stopSmoothStreamDisplay()
+  pendingStreamText = ''
   abortController?.abort()
 }
+
+function voiceButtonText(recording: boolean, text: string) {
+  if (streaming.value) return '终止'
+  if (isBusy.value && !recording) return voiceBusyText.value
+  return text
+}
+
+function startSmoothStreamDisplay(getAssistantMsg: () => Message) {
+  stopSmoothStreamDisplay()
+  streamDisplayTimer = window.setInterval(() => {
+    if (!pendingStreamText) return
+
+    const step = pendingStreamText.length > 24 ? 3 : 1
+    const nextText = pendingStreamText.slice(0, step)
+    pendingStreamText = pendingStreamText.slice(step)
+    getAssistantMsg().content += nextText
+    scrollToBottom()
+  }, 24)
+}
+
+function stopSmoothStreamDisplay() {
+  if (streamDisplayTimer) {
+    window.clearInterval(streamDisplayTimer)
+    streamDisplayTimer = null
+  }
+}
+
+function flushSmoothStreamDisplay(getAssistantMsg: () => Message) {
+  return new Promise<void>((resolve) => {
+    const flushTimer = window.setInterval(() => {
+      if (!pendingStreamText) {
+        window.clearInterval(flushTimer)
+        resolve()
+        return
+      }
+
+      const step = pendingStreamText.length > 30 ? 4 : 2
+      getAssistantMsg().content += pendingStreamText.slice(0, step)
+      pendingStreamText = pendingStreamText.slice(step)
+      scrollToBottom()
+    }, 16)
+  })
+}
+
+async function handleToggleInputMode() {
+  if (inputMode.value === 'voice') {
+    inputMode.value = 'text'
+    return
+  }
+
+  try {
+    const state = permissionState.value === 'granted' ? permissionState.value : await requestPermission()
+    if (state !== 'granted') {
+      showToast('麦克风授权失败')
+      return
+    }
+
+    inputMode.value = 'voice'
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '麦克风授权失败')
+  }
+}
+
+async function handleVoicePressStart() {
+  if (streaming.value) {
+    handleStop()
+    return
+  }
+
+  if (streaming.value || isBusy.value || isRecording.value) return
+
+  try {
+    errorMsg.value = ''
+    await startRecording()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '无法开始录音')
+  }
+}
+
+async function handleVoicePressEnd() {
+  if (!isRecording.value) return
+
+  try {
+    const audio = await stopRecording()
+    if (!audio) return
+
+    const wavFile = await encodeToWavFile(audio.blob)
+    const response = await recognize(wavFile)
+    const text = response?.Result?.trim()
+
+    if (!text) {
+      showToast('未识别到语音内容')
+      return
+    }
+
+    await handleSend(text)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '语音识别失败')
+  }
+}
+
+function handleVoicePressCancel() {
+  handleVoicePressEnd()
+}
+
+onBeforeUnmount(() => {
+  cleanup()
+  stopSmoothStreamDisplay()
+})
 </script>
 
 <style scoped>
@@ -149,7 +309,7 @@ function handleStop() {
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 60px 16px 80px;
+  padding: 60px 16px 88px;
 }
 
 .message-item {
@@ -212,7 +372,8 @@ function handleStop() {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  min-height: 60px;
+  padding: 9px 12px;
   background: #fff;
   border-top: 1px solid #ebedf0;
   position: fixed;
@@ -225,12 +386,40 @@ function handleStop() {
   flex: 1;
   border-radius: 20px;
   background: #f5f5f5;
+  height: 42px;
+  padding: 0 12px;
+}
+
+.input-field :deep(.van-field__body) {
+  height: 42px;
+}
+
+.input-field :deep(.van-field__control) {
+  line-height: 42px;
+}
+
+.mode-btn {
+  flex-shrink: 0;
+  height: 42px;
+  width: 42px;
+  padding: 0;
+}
+
+.voice-record-wrap {
+  flex: 1;
+  height: 42px;
+}
+
+.voice-record-btn {
+  height: 42px;
+  border-radius: 999px;
+  pointer-events: none;
 }
 
 .send-btn,
 .stop-btn {
   flex-shrink: 0;
-  height: 36px;
-  min-width: 56px;
+  height: 42px;
+  min-width: 64px;
 }
 </style>
