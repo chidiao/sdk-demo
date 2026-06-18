@@ -36,7 +36,7 @@ async function handleLogin(user: { userId: string }) {
     }
     const { data } = await imApi.getUserSig(user.userId)
     imStore.setLoginInfo(data)
-    await router.push('/im/conversations')
+    await router.push('/home')
     // await router.push('/im')
   } finally {
     loading.value = null
