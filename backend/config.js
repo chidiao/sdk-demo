@@ -15,6 +15,14 @@ const defaultConfig = {
     apiKey: 'your-zhipu-api-key',
     apiUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
   },
+  tencentAsr: {
+    SecretId: 'your-tencent-asr-secret-id',
+    SecretKey: 'your-tencent-asr-secret-key',
+    endpoint: 'https://asr.tencentcloudapi.com',
+    host: 'asr.tencentcloudapi.com',
+    region: 'ap-shanghai',
+    version: '2019-06-14'
+  },
   server: {
     port: 8080
   }

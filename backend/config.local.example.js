@@ -5,7 +5,8 @@ export default {
   },
   tencentAsr: {
     SecretId: 'your-tencent-asr-secret-id',
-    SecretKey: 'your-tencent-asr-secret-key'
+    SecretKey: 'your-tencent-asr-secret-key',
+    region: 'ap-shanghai'
   },
   zhipu: {
     apiKey: 'your-zhipu-api-key',

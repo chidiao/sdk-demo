@@ -1,11 +1,11 @@
 import express from 'express'
 import config from './config.js'
-import { chatRouter, imRouter } from './routes/index.js'
+import { asrRouter, chatRouter, imRouter } from './routes/index.js'
 
 const app = express()
 const PORT = config.server.port
 
-app.use(express.json())
+app.use(express.json({ limit: '5mb' }))
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
@@ -19,6 +19,7 @@ app.use((req, res, next) => {
 
 app.use('/api', imRouter)
 app.use('/api', chatRouter)
+app.use('/api', asrRouter)
 
 app.use((err, req, res, next) => {
   console.error('Global error:', err)
