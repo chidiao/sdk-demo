@@ -13,9 +13,11 @@
     "@pinia/nuxt": "^0.11.3",
     "@tencentcloud/chat-uikit-vue": "3",
     "nuxt": "^4.4.7",
-    "pinia": "^3.0.4"
+    "pinia": "^3.0.4",
+    "three": "^0.185.0"
   },
   "devDependencies": {
+    "@types/three": "^0.185.0",
     "@unocss/nuxt": "^66.7.0",
     "@unocss/preset-wind4": "^66.7.0",
     "@vant/nuxt": "^1.0.7",
